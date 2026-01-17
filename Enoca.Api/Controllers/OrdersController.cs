@@ -1,75 +1,81 @@
 ﻿using Enoca.Application.DTOs;
+using Enoca.Application.Interfaces;
 using Enoca.Application.Services;
 using Enoca.Domain.Entities;
-using Enoca.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using System.Threading;
 
-namespace Enoca.Api.Controllers
+namespace Enoca.Api.Controllers;
+
+[ApiController]
+[Route("api/[controller]")]
+public class OrdersController : ControllerBase
 {
-    [ApiController]
-    [Route("api/[controller]")]
-    public class OrdersController : ControllerBase
+    private readonly IUnitOfWork _unitOfWork;
+    private readonly IShippingCostCalculator _calculator;
+
+    public OrdersController(IUnitOfWork unitOfWork, IShippingCostCalculator calculator)
     {
-        private readonly AppDbContext _context;
-        private readonly IShippingCostCalculator _calculator;
+        _unitOfWork = unitOfWork;
+        _calculator = calculator;
+    }
 
-        public OrdersController(AppDbContext context, IShippingCostCalculator calculator)
-        {
-            _context = context;
-            _calculator = calculator;
-        }
+   
+    [HttpGet]
+    public async Task<IActionResult> GetAll()
+    {
+        var orders = await _unitOfWork.Orders.GetAllAsync();
+        var carriers = await _unitOfWork.Carriers.GetAllAsync();
 
-        [HttpGet]
-        public async Task<IActionResult> GetAll()
-        {
-            var orders = await _context.Orders
-                .AsNoTracking()
-                .OrderByDescending(x => x.OrderDate)
-                .ToListAsync();
-
-            return Ok(orders);
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
-        {
-            if (dto is null)
-                return BadRequest("Geçersiz istek.");
-
-            if (dto.OrderDesi <= 0)
-                return BadRequest("OrderDesi 0'dan büyük olmalıdır.");
-
-            if (dto.OrderDate == default)
-                return BadRequest("OrderDate zorunludur.");
-
-            var result = await _calculator.CalculateAsync(dto.OrderDesi);
-
-            var order = new Order
+        var result = orders
+            .OrderByDescending(x => x.OrderDate)
+            .Select(x => new OrderListDto
             {
-                CarrierId = result.CarrierId,
-                OrderDesi = dto.OrderDesi,
-                OrderDate = dto.OrderDate,
-                OrderCarrierCost = result.CalculatedCost
-            };
+                OrderId = x.OrderId,
+                CarrierId = x.CarrierId,
+                CarrierName = carriers.FirstOrDefault(c => c.CarrierId == x.CarrierId)?.CarrierName ?? "Bilinmiyor",
+                OrderDesi = x.OrderDesi,
+                OrderDate = x.OrderDate,
+                OrderCarrierCost = x.OrderCarrierCost
+            })
+            .ToList();
 
-            await _context.Orders.AddAsync(order);
-            await _context.SaveChangesAsync();
+        return Ok(result);
+    }
 
-            return Ok("Sipariş eklendi");
-        }
+   
+    [HttpPost]
+    public async Task<IActionResult> Create([FromBody] OrderCreateDto dto)
+    {
+        
 
-        [HttpDelete("{id:int}")]
-        public async Task<IActionResult> Delete(int id)
+        var result = await _calculator.CalculateAsync(dto.OrderDesi);
+
+        var order = new Order
         {
-            var order = await _context.Orders.FindAsync(id);
-            if (order is null)
-                return NotFound($"{id} ID'li kayıt bulunamadı");
+            CarrierId = result.CarrierId,
+            OrderDesi = dto.OrderDesi,
+            OrderDate = dto.OrderDate,
+            OrderCarrierCost = result.CalculatedCost
+        };
 
-            _context.Orders.Remove(order);
-            await _context.SaveChangesAsync();
+        await _unitOfWork.Orders.AddAsync(order);
+        await _unitOfWork.SaveChangesAsync();
 
-            return Ok($"{id} ID'li kayıt silindi");
-        }
+        return Ok("Sipariş eklendi");
+    }
+
+    
+    [HttpDelete("{id:int}")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var order = await _unitOfWork.Orders.GetByIdAsync(id);
+        if (order is null)
+            return NotFound($"{id} ID'li kayıt bulunamadı");
+
+        _unitOfWork.Orders.Remove(order);
+        await _unitOfWork.SaveChangesAsync();
+
+        return Ok($"{id} ID'li kayıt silindi");
     }
 }

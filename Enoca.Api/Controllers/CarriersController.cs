@@ -1,4 +1,6 @@
-﻿using Enoca.Domain.Entities;
+﻿using Enoca.Application.DTOs;
+using Enoca.Application.Interfaces;
+using Enoca.Domain.Entities;
 using Enoca.Infrastructure.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -9,56 +11,55 @@ namespace Enoca.Api.Controllers;
 [Route("api/[controller]")]
 public class CarriersController : ControllerBase
 {
-    private readonly AppDbContext _context;
+    private readonly IUnitOfWork _unitOfWork;
 
-    public CarriersController(AppDbContext context)
+    public CarriersController(IUnitOfWork unitOfWork)
     {
-        _context = context;
+        _unitOfWork = unitOfWork;
     }
 
-   
+
     [HttpGet]
     public async Task<IActionResult> GetAll()
     {
-        var carriers = await _context.Carriers
-            .AsNoTracking()
-            .ToListAsync();
+        var carriers = await _unitOfWork.Carriers
+            .GetAllAsync();
 
         return Ok(carriers);
     }
 
     
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] Carrier carrier)
+    public async Task<IActionResult> Create([FromBody] CarrierCreateDto dto)
     {
-        if (carrier is null)
-            return BadRequest("Geçersiz istek.");
+       
+        var carrier = new Carrier
+        {
+            CarrierName = dto.CarrierName,
+            CarrierIsActive = dto.CarrierIsActive,
+            CarrierPlusDesiCost = dto.CarrierPlusDesiCost
+        };
 
-        if (string.IsNullOrWhiteSpace(carrier.CarrierName))
-            return BadRequest("CarrierName zorunludur.");
-
-        await _context.Carriers.AddAsync(carrier);
-        await _context.SaveChangesAsync();
+        await _unitOfWork.Carriers.AddAsync(carrier);
+        await _unitOfWork.SaveChangesAsync();
 
         return Ok("Kargo firması eklendi");
     }
 
     
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, [FromBody] Carrier carrier)
+    public async Task<IActionResult> Update(int id, [FromBody] CarrierUpdateDto dto)
     {
-        var existing = await _context.Carriers.FindAsync(id);
+        var existing = await _unitOfWork.Carriers.GetByIdAsync(id);
         if (existing is null)
             return NotFound($"{id} ID'li kayıt bulunamadı");
 
-        if (string.IsNullOrWhiteSpace(carrier.CarrierName))
-            return BadRequest("CarrierName zorunludur.");
+        existing.CarrierName = dto.CarrierName;
+        existing.CarrierIsActive = dto.CarrierIsActive;
+        existing.CarrierPlusDesiCost = dto.CarrierPlusDesiCost;
 
-        existing.CarrierName = carrier.CarrierName;
-        existing.CarrierIsActive = carrier.CarrierIsActive;
-        existing.CarrierPlusDesiCost = carrier.CarrierPlusDesiCost;
-
-        await _context.SaveChangesAsync();
+        _unitOfWork.Carriers.Update(existing);
+        await _unitOfWork.SaveChangesAsync();
 
         return Ok("Kargo bilgileri güncellendi");
     }
@@ -67,20 +68,20 @@ public class CarriersController : ControllerBase
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id)
     {
-        var carrier = await _context.Carriers.FindAsync(id);
+        var carrier = await _unitOfWork.Carriers.GetByIdAsync(id);
         if (carrier is null)
             return NotFound($"{id} ID'li kayıt bulunamadı");
 
-        var hasConfigs = await _context.CarrierConfigurations.AnyAsync(x => x.CarrierId == id);
+        var hasConfigs = (await _unitOfWork.CarrierConfigurations.WhereAsync(x => x.CarrierId == id)).Any();
         if (hasConfigs)
             return BadRequest("Bu kargo firmasına ait konfigürasyonlar var. Önce konfigürasyonları silmelisiniz.");
 
-        var hasOrders = await _context.Orders.AnyAsync(x => x.CarrierId == id);
+        var hasOrders = (await _unitOfWork.Orders.WhereAsync(x => x.CarrierId == id)).Any();
         if (hasOrders)
             return BadRequest("Bu kargo firmasına ait siparişler var. Önce siparişleri silmelisiniz.");
 
-        _context.Carriers.Remove(carrier);
-        await _context.SaveChangesAsync();
+        _unitOfWork.Carriers.Remove(carrier);
+        await _unitOfWork.SaveChangesAsync();
 
         return Ok($"{id} ID'li kayıt silindi");
     }
