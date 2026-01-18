@@ -17,6 +17,8 @@ namespace Enoca.Infrastructure.Data
         public DbSet<Carrier> Carriers => Set<Carrier>();
         public DbSet<CarrierConfiguration> CarrierConfigurations => Set<CarrierConfiguration>();
         public DbSet<Order> Orders => Set<Order>();
+        public DbSet<CarrierReport> CarrierReports { get; set; }
+
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -85,6 +87,20 @@ namespace Enoca.Infrastructure.Data
                       .IsRequired()
                       .HasPrecision(18, 2);
             });
+            modelBuilder.Entity<CarrierReport>(entity =>
+            {
+                entity.HasKey(x => x.CarrierReportId);
+
+                entity.Property(x => x.CarrierId).IsRequired();
+                entity.Property(x => x.CarrierCost).IsRequired().HasPrecision(18, 2);
+                entity.Property(x => x.CarrierReportDate).IsRequired();
+
+                entity.HasOne(x => x.Carrier)
+                      .WithMany()
+                      .HasForeignKey(x => x.CarrierId)
+                      .OnDelete(DeleteBehavior.Restrict);
+            });
+
         }
     }
 }

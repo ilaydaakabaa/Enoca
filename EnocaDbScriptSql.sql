@@ -55,3 +55,26 @@ GO
 COMMIT;
 GO
 
+BEGIN TRANSACTION;
+GO
+
+CREATE TABLE [CarrierReports] (
+    [CarrierReportId] int NOT NULL IDENTITY,
+    [CarrierId] int NOT NULL,
+    [CarrierCost] decimal(18,2) NOT NULL,
+    [CarrierReportDate] datetime2 NOT NULL,
+    CONSTRAINT [PK_CarrierReports] PRIMARY KEY ([CarrierReportId]),
+    CONSTRAINT [FK_CarrierReports_Carriers_CarrierId] FOREIGN KEY ([CarrierId]) REFERENCES [Carriers] ([CarrierId]) ON DELETE NO ACTION
+);
+GO
+
+CREATE INDEX [IX_CarrierReports_CarrierId] ON [CarrierReports] ([CarrierId]);
+GO
+
+INSERT INTO [__EFMigrationsHistory] ([MigrationId], [ProductVersion])
+VALUES (N'20260118182356_AddCarrierReports', N'6.0.36');
+GO
+
+COMMIT;
+GO
+

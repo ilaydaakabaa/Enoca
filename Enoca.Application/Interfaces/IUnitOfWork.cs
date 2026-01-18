@@ -8,6 +8,8 @@ namespace Enoca.Application.Interfaces
         IGenericRepository<Carrier> Carriers { get; }
         IGenericRepository<CarrierConfiguration> CarrierConfigurations { get; }
         IGenericRepository<Order> Orders { get; }
+        IGenericRepository<CarrierReport> CarrierReports { get; }
+
 
         Task<int> SaveChangesAsync();
     }
